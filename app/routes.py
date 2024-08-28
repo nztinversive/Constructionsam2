@@ -98,20 +98,15 @@ def index():
 
 @main_bp.route('/results')
 def results():
-    all_images = get_all_images()
-    if not all_images:
+    latest_images = get_latest_images()
+    if not latest_images:
         return redirect(url_for('main.index'))
     
     progress_data = get_progress_data()
     images = []
-    for image in all_images:
+    for image in latest_images:
         progress = progress_data.get(image, {}).get('progress', 0)
-        timestamp = progress_data.get(image, {}).get('timestamp', datetime.now().isoformat())
-        images.append({
-            'filename': image,
-            'progress': progress,
-            'timestamp': datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        })
+        images.append({'filename': image, 'progress': progress})
     
     return render_template('results.html', images=images)
 
@@ -146,8 +141,3 @@ def allowed_file(filename):
 @main_bp.route('/progress_data')
 def progress_data():
     return jsonify(get_progress_data())
-
-def get_all_images():
-    uploads_dir = os.path.join(current_app.root_path, 'uploads')
-    image_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and not f.startswith(('processed_', 'segmentation_'))]
-    return sorted(image_files, key=lambda x: os.path.getctime(os.path.join(uploads_dir, x)), reverse=True)
