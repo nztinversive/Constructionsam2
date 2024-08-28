@@ -10,6 +10,9 @@ import requests
 from PIL import Image
 import io
 import time
+import json
+from datetime import datetime
+from werkzeug.utils import secure_filename
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -17,53 +20,74 @@ logger = logging.getLogger(__name__)
 
 main_bp = Blueprint('main', __name__)
 
+def save_progress(image_filename, progress):
+    progress_file = os.path.join(current_app.root_path, 'uploads', 'progress.json')
+    try:
+        with open(progress_file, 'r') as f:
+            progress_data = json.load(f)
+    except FileNotFoundError:
+        progress_data = {}
+
+    progress_data[image_filename] = {
+        'progress': progress,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    with open(progress_file, 'w') as f:
+        json.dump(progress_data, f)
+
+def get_progress_data():
+    progress_file = os.path.join(current_app.root_path, 'uploads', 'progress.json')
+    try:
+        with open(progress_file, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
 @main_bp.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'upload':
-            # Handle file upload
-            file = request.files['file']
-            if file:
-                filename = file.filename
-                file_path = os.path.join(current_app.root_path, 'uploads', filename)
-                file.save(file_path)
+            uploaded_files = request.files.getlist('file')
+            if uploaded_files:
+                filenames = []
+                for file in uploaded_files:
+                    if file and allowed_file(file.filename):
+                        filename = secure_filename(file.filename)
+                        file_path = os.path.join(current_app.root_path, 'uploads', filename)
+                        file.save(file_path)
+                        filenames.append(filename)
                 return jsonify({
                     "success": True, 
-                    "message": "File uploaded successfully",
-                    "filename": filename,
+                    "message": "Files uploaded successfully",
+                    "filenames": filenames,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 })
             else:
-                return jsonify({"success": False, "message": "No file uploaded"})
+                return jsonify({"success": False, "message": "No files uploaded"})
         elif action == 'process':
             try:
-                latest_image = get_latest_image()
-                if not latest_image:
-                    raise ValueError("No image found for processing")
+                latest_images = get_latest_images()
+                if not latest_images:
+                    raise ValueError("No images found for processing")
                 
-                image_path = os.path.join(current_app.root_path, 'uploads', latest_image)
-                segmentation_result = segment_structure(image_path, "construction site")
-                logger.debug(f"Segmentation result: {segmentation_result}")
-                
-                mask_array = segmentation_result['combined_mask']
-                mask_image = Image.fromarray(mask_array)
-                
-                # Convert to RGB if the image is in RGBA mode
-                if mask_image.mode == 'RGBA':
-                    mask_image = mask_image.convert('RGB')
-                
-                segmentation_filename = f'segmentation_{os.path.splitext(latest_image)[0]}.png'
-                mask_image.save(os.path.join(current_app.root_path, 'uploads', segmentation_filename), format='PNG')
-                
-                # Simulate processing by creating a copy of the original image
-                processed_image_path = os.path.join(current_app.root_path, 'uploads', f'processed_{latest_image}')
-                Image.open(image_path).save(processed_image_path)
-                
-                progress = 50.0  # Replace with actual progress calculation
-                
-                with open(os.path.join(current_app.root_path, 'uploads', 'latest_progress.txt'), "w") as f:
-                    f.write(str(progress))
+                for image in latest_images:
+                    image_path = os.path.join(current_app.root_path, 'uploads', image)
+                    segmentation_result = segment_structure(image_path, "construction site")
+                    logger.debug(f"Segmentation result for {image}: {segmentation_result}")
+                    
+                    mask_array = segmentation_result['combined_mask']
+                    mask_image = Image.fromarray(mask_array)
+                    
+                    if mask_image.mode == 'RGBA':
+                        mask_image = mask_image.convert('RGB')
+                    
+                    segmentation_filename = f'segmentation_{os.path.splitext(image)[0]}.png'
+                    mask_image.save(os.path.join(current_app.root_path, 'uploads', segmentation_filename), format='PNG')
+                    
+                    progress = 50.0  # Replace with actual progress calculation
+                    save_progress(image, progress)
                 
                 return jsonify({"success": True, "message": "Processing successful", "redirect": url_for('main.results')})
             except Exception as e:
@@ -74,17 +98,22 @@ def index():
 
 @main_bp.route('/results')
 def results():
-    latest_image = get_latest_image()
-    if not latest_image:
+    all_images = get_all_images()
+    if not all_images:
         return redirect(url_for('main.index'))
     
-    progress = 0
-    try:
-        with open(os.path.join(current_app.root_path, 'uploads', 'latest_progress.txt'), "r") as f:
-            progress = float(f.read())
-    except:
-        pass
-    return render_template('results.html', image_filename=latest_image, progress=progress)
+    progress_data = get_progress_data()
+    images = []
+    for image in all_images:
+        progress = progress_data.get(image, {}).get('progress', 0)
+        timestamp = progress_data.get(image, {}).get('timestamp', datetime.now().isoformat())
+        images.append({
+            'filename': image,
+            'progress': progress,
+            'timestamp': datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        })
+    
+    return render_template('results.html', images=images)
 
 @main_bp.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -105,3 +134,20 @@ def get_latest_image():
     if image_files:
         return max(image_files, key=lambda x: os.path.getctime(os.path.join(uploads_dir, x)))
     return None
+
+def get_latest_images(limit=5):
+    uploads_dir = os.path.join(current_app.root_path, 'uploads')
+    image_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and not f.startswith(('processed_', 'segmentation_'))]
+    return sorted(image_files, key=lambda x: os.path.getctime(os.path.join(uploads_dir, x)), reverse=True)[:limit]
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg'}
+
+@main_bp.route('/progress_data')
+def progress_data():
+    return jsonify(get_progress_data())
+
+def get_all_images():
+    uploads_dir = os.path.join(current_app.root_path, 'uploads')
+    image_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and not f.startswith(('processed_', 'segmentation_'))]
+    return sorted(image_files, key=lambda x: os.path.getctime(os.path.join(uploads_dir, x)), reverse=True)

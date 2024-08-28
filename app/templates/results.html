@@ -7,54 +7,288 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
+        }
+        .scroll-animate {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .scroll-animate.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .image-compare {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            overflow: hidden;
+        }
+        .image-compare img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-compare .comparison-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 50%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .image-compare .comparison-overlay img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-compare .slider {
+            opacity: 0;
+        }
+        .image-compare .slider-button {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: white;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: ew-resize;
+        }
+        .image-compare .slider-button::before,
+        .image-compare .slider-button::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 12px;
+            height: 12px;
+            border: 2px solid white;
+            border-top: none;
+            border-right: none;
+        }
+        .image-compare .slider-button::before {
+            left: -6px;
+            transform: translateY(-50%) rotate(45deg);
+        }
+        .image-compare .slider-button::after {
+            right: -6px;
+            transform: translateY(-50%) rotate(225deg);
+        }
+        .dark {
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .dark .bg-white {
+            background-color: #2d3748;
+        }
+        .dark .text-indigo-800 {
+            color: #a3bffa;
+        }
+        .dark .text-indigo-600 {
+            color: #7f9cf5;
+        }
+        .dark .text-gray-600 {
+            color: #cbd5e0;
         }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen">
     <div class="container mx-auto px-4 py-12">
-        <header class="text-center mb-16">
+        <header class="text-center mb-16 scroll-animate">
             <h1 class="text-5xl font-bold text-indigo-800 mb-4">Construction Progress Monitor</h1>
             <p class="text-xl text-indigo-600">Track your construction progress with AI-powered image analysis</p>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            <div class="bg-white shadow-2xl rounded-3xl p-8 transform hover:scale-105 transition-transform duration-300">
-                <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Original Image</h2>
-                <img src="{{ url_for('main.uploaded_file', filename=image_filename) }}" alt="Original Image" class="w-full h-auto rounded-lg">
+        <div class="bg-white shadow-xl rounded-2xl p-6 mb-8 scroll-animate">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-700">Filter Images</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="date-range" class="block text-sm font-medium text-gray-700">Date Range</label>
+                    <input type="text" id="date-range" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50" placeholder="Select date range">
+                </div>
+                <div>
+                    <label for="progress-filter" class="block text-sm font-medium text-gray-700">Progress</label>
+                    <select id="progress-filter" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                        <option value="all">All</option>
+                        <option value="0-25">0-25%</option>
+                        <option value="26-50">26-50%</option>
+                        <option value="51-75">51-75%</option>
+                        <option value="76-100">76-100%</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sort-by" class="block text-sm font-medium text-gray-700">Sort By</label>
+                    <select id="sort-by" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                        <option value="date-desc">Date (Newest First)</option>
+                        <option value="date-asc">Date (Oldest First)</option>
+                        <option value="progress-desc">Progress (Highest First)</option>
+                        <option value="progress-asc">Progress (Lowest First)</option>
+                    </select>
+                </div>
             </div>
+        </div>
 
-            <div class="bg-white shadow-2xl rounded-3xl p-8 transform hover:scale-105 transition-transform duration-300">
-                <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Processed Image</h2>
-                <img src="{{ url_for('main.uploaded_file', filename='processed_' + image_filename) }}" alt="Processed Image" class="w-full h-auto rounded-lg">
+        <div id="image-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {% for image in images %}
+            <div class="bg-white shadow-xl rounded-2xl p-6 scroll-animate image-item" data-timestamp="{{ image.timestamp }}" data-progress="{{ image.progress }}">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-700">{{ image.filename }}</h2>
+                <div class="image-compare mb-4">
+                    <img src="{{ url_for('main.uploaded_file', filename=image.filename) }}" alt="Original Image">
+                    <div class="comparison-overlay">
+                        <img src="{{ url_for('main.uploaded_file', filename='segmentation_' + image.filename.rsplit('.', 1)[0] + '.png') }}" alt="Segmentation Result">
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="slider" id="slider-{{ loop.index }}">
+                    <div class="slider-button"></div>
+                </div>
+                <p class="text-gray-600 mb-2">Timestamp: {{ image.timestamp }}</p>
+                <p class="text-gray-600 mb-2">Progress: {{ image.progress }}%</p>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: {{ image.progress }}%"></div>
+                </div>
             </div>
+            {% endfor %}
         </div>
 
-        <div class="bg-white shadow-2xl rounded-3xl p-8 mb-12 transform hover:scale-105 transition-transform duration-300">
-            <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Segmentation Result</h2>
-            <img src="{{ url_for('main.uploaded_file', filename='segmentation_' + image_filename.rsplit('.', 1)[0] + '.png') }}" alt="Segmentation Result" class="w-full h-auto rounded-lg">
-        </div>
-
-        <div class="bg-white shadow-md rounded-lg p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-2">Progress</h3>
-            <p class="text-gray-600 mb-4">Current progress: {{ progress }}%</p>
-        </div>
-
-        <div class="bg-white shadow-md rounded-lg p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-2">Detailed Report</h3>
-            <p class="text-gray-600 mb-4">Download the comprehensive PDF report for in-depth analysis and insights.</p>
-            <a href="#" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-block">
-                Download Report (Coming Soon)
-            </a>
-        </div>
-
-        <div class="text-center">
+        <div class="text-center mt-8 scroll-animate">
             <a href="{{ url_for('main.index') }}" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded inline-block">
                 Upload Another Image
             </a>
         </div>
     </div>
+
+    <button id="darkModeToggle" class="fixed top-4 right-4 bg-indigo-600 text-white p-2 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+    </button>
+
+    <script>
+        $(document).ready(function() {
+            function checkScroll() {
+                $('.scroll-animate').each(function() {
+                    if ($(this).offset().top < $(window).scrollTop() + $(window).height() - 100) {
+                        $(this).addClass('active');
+                    }
+                });
+            }
+
+            checkScroll();
+            $(window).scroll(checkScroll);
+
+            // Initialize date range picker
+            flatpickr("#date-range", {
+                mode: "range",
+                dateFormat: "Y-m-d",
+                onChange: function(selectedDates, dateStr, instance) {
+                    filterImages();
+                }
+            });
+
+            // Filter and sort images
+            function filterImages() {
+                const dateRange = $('#date-range').val().split(' to ');
+                const progressFilter = $('#progress-filter').val();
+                const sortBy = $('#sort-by').val();
+
+                $('.image-item').each(function() {
+                    const timestamp = new Date($(this).data('timestamp'));
+                    const progress = $(this).data('progress');
+
+                    let showImage = true;
+
+                    // Date range filter
+                    if (dateRange.length === 2) {
+                        const startDate = new Date(dateRange[0]);
+                        const endDate = new Date(dateRange[1]);
+                        showImage = showImage && (timestamp >= startDate && timestamp <= endDate);
+                    }
+
+                    // Progress filter
+                    if (progressFilter !== 'all') {
+                        const [min, max] = progressFilter.split('-').map(Number);
+                        showImage = showImage && (progress >= min && progress <= max);
+                    }
+
+                    $(this).toggle(showImage);
+                });
+
+                // Sort images
+                const imageItems = $('.image-item').get();
+                imageItems.sort(function(a, b) {
+                    const aVal = $(a).data(sortBy.split('-')[0]);
+                    const bVal = $(b).data(sortBy.split('-')[0]);
+                    return sortBy.endsWith('asc') ? aVal - bVal : bVal - aVal;
+                });
+
+                $('#image-grid').append(imageItems);
+            }
+
+            // Attach event listeners
+            $('#progress-filter, #sort-by').change(filterImages);
+
+            // Initialize image comparison sliders
+            $('.image-compare').each(function(index) {
+                const slider = document.getElementById(`slider-${index + 1}`);
+                const sliderButton = $(this).find('.slider-button')[0];
+                const overlay = $(this).find('.comparison-overlay')[0];
+                const container = $(this)[0];
+                let isDown = false;
+
+                function updateSliderPosition(x) {
+                    const bounds = container.getBoundingClientRect();
+                    let percent = (x - bounds.left) / bounds.width * 100;
+                    percent = Math.min(100, Math.max(0, percent));
+                    slider.value = percent;
+                    overlay.style.width = `${percent}%`;
+                    sliderButton.style.left = `${percent}%`;
+                }
+
+                sliderButton.addEventListener('mousedown', (e) => {
+                    isDown = true;
+                    e.preventDefault();
+                });
+
+                window.addEventListener('mouseup', () => {
+                    isDown = false;
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (!isDown) return;
+                    updateSliderPosition(e.clientX);
+                });
+
+                container.addEventListener('click', (e) => {
+                    updateSliderPosition(e.clientX);
+                });
+
+                // Initialize slider position
+                updateSliderPosition(slider.getBoundingClientRect().left + slider.getBoundingClientRect().width / 2);
+            });
+
+            // Dark mode toggle
+            $('#darkModeToggle').click(function() {
+                $('body').toggleClass('dark');
+                $('.bg-white').toggleClass('bg-gray-800');
+                $('.text-indigo-800').toggleClass('text-indigo-200');
+                $('.text-indigo-600, .text-indigo-700').toggleClass('text-indigo-400');
+                $('.text-gray-600').toggleClass('text-gray-400');
+                $('.bg-indigo-100').toggleClass('bg-indigo-900');
+                $('.bg-indigo-50').toggleClass('bg-indigo-800');
+                $('.border-indigo-300').toggleClass('border-indigo-700');
+                $('.bg-gray-100').toggleClass('bg-gray-700');
+                $('.bg-gray-200').toggleClass('bg-gray-600');
+            });
+        });
+    </script>
 </body>
 </html>
