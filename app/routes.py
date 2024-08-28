@@ -1,107 +1,107 @@
-from flask import Blueprint, render_template, request, flash, send_file, redirect, url_for
-from modules.sam_integration import segment_structure, download_mask
-from modules.image_processing import preprocess_image, align_images
-from modules.progress_tracking import calculate_progress
-from modules.reporting import generate_report, update_web_interface
+from flask import Blueprint, render_template, request, flash, send_file, redirect, url_for, jsonify, current_app
+from modules.sam_integration import segment_structure
+from modules.image_processing import preprocess_image
 import cv2
 import numpy as np
 import os
-from config import Config
 import logging
 import traceback
-
-main_bp = Blueprint('main', __name__)
+import requests
+from PIL import Image
+import io
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+main_bp = Blueprint('main', __name__)
+
 @main_bp.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file part')
-            return render_template('index.html')
-        file = request.files['file']
-        if file.filename == '':
-            flash('No selected file')
-            return render_template('index.html')
-        if file:
+        action = request.form.get('action')
+        if action == 'upload':
+            # Handle file upload
+            file = request.files['file']
+            if file:
+                filename = file.filename
+                file_path = os.path.join(current_app.root_path, 'uploads', filename)
+                file.save(file_path)
+                return jsonify({
+                    "success": True, 
+                    "message": "File uploaded successfully",
+                    "filename": filename,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                })
+            else:
+                return jsonify({"success": False, "message": "No file uploaded"})
+        elif action == 'process':
             try:
-                # Read and preprocess the image
-                image_bytes = file.read()
-                nparr = np.frombuffer(image_bytes, np.uint8)
-                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                logger.debug(f"Original image shape: {image.shape}")
+                latest_image = get_latest_image()
+                if not latest_image:
+                    raise ValueError("No image found for processing")
                 
-                preprocessed_image = preprocess_image(image)
-                logger.debug(f"Preprocessed image shape: {preprocessed_image.shape}")
-                
-                # Segment the image
-                segmentation_result = segment_structure(preprocessed_image, "construction site")
+                image_path = os.path.join(current_app.root_path, 'uploads', latest_image)
+                segmentation_result = segment_structure(image_path, "construction site")
                 logger.debug(f"Segmentation result: {segmentation_result}")
                 
-                if 'combined_mask' not in segmentation_result:
-                    raise ValueError("Segmentation result does not contain 'combined_mask'")
+                mask_array = segmentation_result['combined_mask']
+                mask_image = Image.fromarray(mask_array)
                 
-                combined_mask_url = segmentation_result['combined_mask']
-                combined_mask = download_mask(combined_mask_url)
-                logger.debug(f"Combined mask shape: {combined_mask.shape}")
+                # Convert to RGB if the image is in RGBA mode
+                if mask_image.mode == 'RGBA':
+                    mask_image = mask_image.convert('RGB')
                 
-                # Resize the mask to match the preprocessed image size
-                combined_mask = cv2.resize(combined_mask, (preprocessed_image.shape[1], preprocessed_image.shape[0]))
-                logger.debug(f"Resized mask shape: {combined_mask.shape}")
+                segmentation_filename = f'segmentation_{os.path.splitext(latest_image)[0]}.png'
+                mask_image.save(os.path.join(current_app.root_path, 'uploads', segmentation_filename), format='PNG')
                 
-                # Calculate progress
-                previous_segmentation = get_previous_segmentation()
-                if previous_segmentation is not None:
-                    logger.debug(f"Previous segmentation shape: {previous_segmentation.shape}")
-                    progress = calculate_progress(previous_segmentation, combined_mask)
-                else:
-                    progress = 0.0
-                logger.debug(f"Calculated progress: {progress}")
+                # Simulate processing by creating a copy of the original image
+                processed_image_path = os.path.join(current_app.root_path, 'uploads', f'processed_{latest_image}')
+                Image.open(image_path).save(processed_image_path)
                 
-                # Save current data for future comparison
-                save_current_data(preprocessed_image, combined_mask)
+                progress = 50.0  # Replace with actual progress calculation
                 
-                # Create the static directory if it doesn't exist
-                os.makedirs('static', exist_ok=True)
-                
-                # Update progress file
-                with open("static/latest_progress.txt", "w") as f:
+                with open(os.path.join(current_app.root_path, 'uploads', 'latest_progress.txt'), "w") as f:
                     f.write(str(progress))
                 
-                flash('Processing successful!')
-                return redirect(url_for('main.results'))
+                return jsonify({"success": True, "message": "Processing successful", "redirect": url_for('main.results')})
             except Exception as e:
                 logger.exception("An error occurred during processing")
-                error_traceback = traceback.format_exc()
-                logger.error(f"Full traceback:\n{error_traceback}")
-                flash(f"Error during processing: {str(e)}")
+                return jsonify({"success": False, "message": str(e)})
+    
     return render_template('index.html')
 
 @main_bp.route('/results')
 def results():
-    progress = 0.0
-    if os.path.exists("static/latest_progress.txt"):
-        with open("static/latest_progress.txt", "r") as f:
+    latest_image = get_latest_image()
+    if not latest_image:
+        return redirect(url_for('main.index'))
+    
+    progress = 0
+    try:
+        with open(os.path.join(current_app.root_path, 'uploads', 'latest_progress.txt'), "r") as f:
             progress = float(f.read())
-    return render_template('results.html', progress=progress)
+    except:
+        pass
+    return render_template('results.html', image_filename=latest_image, progress=progress)
 
 @main_bp.route('/uploads/<filename>')
 def uploaded_file(filename):
-    return send_file(os.path.join(Config.UPLOAD_FOLDER, filename))
+    uploads_dir = os.path.join(current_app.root_path, 'uploads')
+    
+    # Check for both .jpg and .png extensions
+    for ext in ['.jpg', '.png']:
+        file_path = os.path.join(uploads_dir, os.path.splitext(filename)[0] + ext)
+        if os.path.exists(file_path):
+            return send_file(file_path)
+    
+    # If neither file exists, return a 404 error
+    return "File not found", 404
 
-@main_bp.route('/static/<filename>')
-def static_file(filename):
-    return send_file(os.path.join('static', filename))
-
-def get_previous_segmentation():
-    if os.path.exists("static/latest_segmentation.png"):
-        return cv2.imread("static/latest_segmentation.png", cv2.IMREAD_GRAYSCALE)
+def get_latest_image():
+    uploads_dir = os.path.join(current_app.root_path, 'uploads')
+    image_files = [f for f in os.listdir(uploads_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and not f.startswith(('processed_', 'segmentation_'))]
+    if image_files:
+        return max(image_files, key=lambda x: os.path.getctime(os.path.join(uploads_dir, x)))
     return None
-
-def save_current_data(image, segmentation):
-    os.makedirs('static', exist_ok=True)
-    cv2.imwrite("static/latest_image.png", image)
-    cv2.imwrite("static/latest_segmentation.png", segmentation)

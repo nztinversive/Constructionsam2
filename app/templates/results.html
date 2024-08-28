@@ -3,41 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Progress Results</title>
+    <title>Construction Progress Monitor - Results</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">Construction Progress Results</h1>
-            <p class="text-xl text-gray-600">Analysis of your latest construction site image</p>
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen">
+    <div class="container mx-auto px-4 py-12">
+        <header class="text-center mb-16">
+            <h1 class="text-5xl font-bold text-indigo-800 mb-4">Construction Progress Monitor</h1>
+            <p class="text-xl text-indigo-600">Track your construction progress with AI-powered image analysis</p>
         </header>
 
-        <div class="bg-white shadow-md rounded-lg p-6 mb-8">
-            <h2 class="text-2xl font-semibold mb-4">Progress Overview</h2>
-            <div class="flex items-center justify-center">
-                <div class="w-64 h-64 rounded-full flex items-center justify-center border-8 border-blue-500">
-                    <span class="text-4xl font-bold text-blue-500">{{ progress }}%</span>
-                </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+            <div class="bg-white shadow-2xl rounded-3xl p-8 transform hover:scale-105 transition-transform duration-300">
+                <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Original Image</h2>
+                <img src="{{ url_for('main.uploaded_file', filename=image_filename) }}" alt="Original Image" class="w-full h-auto rounded-lg">
+            </div>
+
+            <div class="bg-white shadow-2xl rounded-3xl p-8 transform hover:scale-105 transition-transform duration-300">
+                <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Processed Image</h2>
+                <img src="{{ url_for('main.uploaded_file', filename='processed_' + image_filename) }}" alt="Processed Image" class="w-full h-auto rounded-lg">
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-white shadow-md rounded-lg p-6">
-                <h3 class="text-xl font-semibold mb-2">Latest Image</h3>
-                <img src="{{ url_for('main.static_file', filename='latest_image.png') }}" alt="Latest Image" class="w-full h-auto rounded-lg">
-            </div>
-            <div class="bg-white shadow-md rounded-lg p-6">
-                <h3 class="text-xl font-semibold mb-2">Segmentation Result</h3>
-                <img src="{{ url_for('main.static_file', filename='latest_segmentation.png') }}" alt="Latest Segmentation" class="w-full h-auto rounded-lg">
-            </div>
+        <div class="bg-white shadow-2xl rounded-3xl p-8 mb-12 transform hover:scale-105 transition-transform duration-300">
+            <h2 class="text-3xl font-semibold mb-6 text-indigo-700">Segmentation Result</h2>
+            <img src="{{ url_for('main.uploaded_file', filename='segmentation_' + image_filename.rsplit('.', 1)[0] + '.png') }}" alt="Segmentation Result" class="w-full h-auto rounded-lg">
+        </div>
+
+        <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-2">Progress</h3>
+            <p class="text-gray-600 mb-4">Current progress: {{ progress }}%</p>
         </div>
 
         <div class="bg-white shadow-md rounded-lg p-6 mb-8">
             <h3 class="text-xl font-semibold mb-2">Detailed Report</h3>
             <p class="text-gray-600 mb-4">Download the comprehensive PDF report for in-depth analysis and insights.</p>
-            <a href="{{ url_for('main.static_file', filename='latest_report.pdf') }}" target="_blank" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-block">
-                Download Report
+            <a href="#" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded inline-block">
+                Download Report (Coming Soon)
             </a>
         </div>
 

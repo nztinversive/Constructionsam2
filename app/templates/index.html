@@ -5,61 +5,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construction Progress Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        .loader {
+            border-top-color: #4f46e5;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @-webkit-keyframes spinner {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen">
     <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">Construction Progress Monitor</h1>
-            <p class="text-xl text-gray-600">Track your construction progress with AI-powered image analysis</p>
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-indigo-800 mb-2">Construction Progress Monitor</h1>
+            <p class="text-lg text-indigo-600">Track your construction progress with AI-powered image analysis</p>
         </header>
 
-        <div class="bg-white shadow-md rounded-lg p-6 mb-8">
-            <h2 class="text-2xl font-semibold mb-4">Upload Your Construction Site Image</h2>
-            <form method="post" enctype="multipart/form-data" class="space-y-4">
-                <div class="flex items-center justify-center w-full">
-                    <label for="file-upload" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                            <svg class="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
-                            <p class="text-xs text-gray-500">PNG, JPG or JPEG (MAX. 800x600px)</p>
-                        </div>
-                        <input id="file-upload" name="file" type="file" class="hidden" accept=".png,.jpg,.jpeg" />
-                    </label>
-                </div>
-                <div>
-                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
-                        Upload and Process
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-white shadow-xl rounded-2xl p-6 mb-8">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-700">Upload Your Construction Site Image</h2>
+                <form id="uploadForm" enctype="multipart/form-data" class="space-y-4">
+                    <div class="flex items-center justify-center w-full">
+                        <label for="file-upload" class="flex flex-col items-center justify-center w-full h-40 border-2 border-indigo-300 border-dashed rounded-lg cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition-colors duration-300">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <svg class="w-8 h-8 mb-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                                <p class="mb-2 text-sm text-indigo-600"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                                <p class="text-xs text-indigo-500">PNG, JPG or JPEG (MAX. 1024x1024px)</p>
+                            </div>
+                            <input id="file-upload" name="file" type="file" class="hidden" accept=".png,.jpg,.jpeg" />
+                        </label>
+                    </div>
+                    <div id="fileName" class="text-center text-indigo-600 mt-2"></div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full transition-colors duration-300 transform hover:scale-105">
+                        Upload Image
                     </button>
-                </div>
+                </form>
+            </div>
+
+            <div class="bg-white shadow-xl rounded-2xl p-6 mb-8">
+                <h2 class="text-2xl font-semibold mb-4 text-indigo-700">Progress Overview</h2>
+                <div id="progressChart" class="h-64 bg-gray-100 rounded-lg"></div>
+            </div>
+        </div>
+
+        <div id="uploadProgress" class="hidden bg-indigo-200 rounded-full h-3 mb-4">
+            <div class="bg-indigo-600 h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+        </div>
+
+        <div id="uploadStatus" class="hidden text-center text-green-600 text-sm mb-4"></div>
+
+        <div id="uploadedImage" class="hidden mb-8">
+            <h3 class="text-xl font-semibold mb-2 text-indigo-700">Uploaded Image</h3>
+            <img src="" alt="Uploaded Image" class="w-full h-auto rounded-lg shadow-md">
+        </div>
+
+        <div id="processSection" class="hidden">
+            <form id="processForm" class="space-y-4">
+                <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-full transition-colors duration-300 transform hover:scale-105">
+                    Process Image
+                </button>
             </form>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-white shadow-md rounded-lg p-6">
-                <h3 class="text-xl font-semibold mb-2">AI-Powered Segmentation</h3>
-                <p class="text-gray-600">Utilize SAM 2 for accurate structural element detection</p>
-            </div>
-            <div class="bg-white shadow-md rounded-lg p-6">
-                <h3 class="text-xl font-semibold mb-2">Progress Tracking</h3>
-                <p class="text-gray-600">Automatically calculate and visualize construction progress</p>
-            </div>
-            <div class="bg-white shadow-md rounded-lg p-6">
-                <h3 class="text-xl font-semibold mb-2">Detailed Reporting</h3>
-                <p class="text-gray-600">Generate comprehensive PDF reports for easy sharing</p>
-            </div>
+        <div id="processingLoader" class="hidden flex justify-center items-center mt-4">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+        </div>
+
+        <div id="processingStatus" class="hidden text-center text-indigo-600 text-sm mt-4"></div>
+
+        <div class="bg-white shadow-xl rounded-2xl p-6 mt-8">
+            <h2 class="text-2xl font-semibold mb-4 text-indigo-700">Upload History</h2>
+            <ul id="uploadHistory" class="space-y-2">
+                <!-- Upload history will be populated dynamically -->
+            </ul>
         </div>
     </div>
 
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="fixed bottom-0 right-0 m-6">
-                {% for message in messages %}
-                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-2" role="alert">
-                        <p>{{ message }}</p>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+    <script>
+        $(document).ready(function() {
+            $('#file-upload').change(function() {
+                var fileName = $(this).val().split('\\').pop();
+                $('#fileName').text(fileName);
+            });
+
+            $('#uploadForm').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                formData.append('action', 'upload');
+
+                $.ajax({
+                    url: '/',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener("progress", function(evt) {
+                            if (evt.lengthComputable) {
+                                var percentComplete = evt.loaded / evt.total;
+                                $('#uploadProgress').removeClass('hidden').find('div').css('width', percentComplete * 100 + '%');
+                            }
+                        }, false);
+                        return xhr;
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#uploadStatus').removeClass('hidden').text('Upload successful!');
+                            $('#processSection').removeClass('hidden');
+                            $('#uploadedImage').removeClass('hidden').find('img').attr('src', '/static/uploaded_image.png?' + new Date().getTime());
+                            updateUploadHistory(response.filename, response.timestamp);
+                            updateProgressChart(response.progressData);
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('An error occurred during upload.');
+                    },
+                    complete: function() {
+                        setTimeout(function() {
+                            $('#uploadProgress').addClass('hidden');
+                        }, 500);
+                    }
+                });
+            });
+
+            $('#processForm').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData();
+                formData.append('action', 'process');
+
+                $('#processingLoader').removeClass('hidden');
+                $('#processForm button').prop('disabled', true);
+                $('#processingStatus').removeClass('hidden').text('Processing image... This may take a few minutes.');
+
+                $.ajax({
+                    url: '/',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        if (response.success) {
+                            window.location.href = response.redirect;
+                        } else {
+                            alert(response.message);
+                            $('#processingStatus').text('Processing failed. Please try again.');
+                        }
+                    },
+                    error: function() {
+                        alert('An error occurred during processing.');
+                        $('#processingStatus').text('Processing failed. Please try again.');
+                    },
+                    complete: function() {
+                        $('#processingLoader').addClass('hidden');
+                        $('#processForm button').prop('disabled', false);
+                    }
+                });
+            });
+        });
+
+        // Add this function to update the progress chart
+        function updateProgressChart(data) {
+            // Implement chart update logic here
+            // You can use a library like Chart.js for this
+        }
+
+        // Add this function to update the upload history
+        function updateUploadHistory(filename, timestamp) {
+            const historyItem = `<li class="text-indigo-600">${filename} - ${timestamp}</li>`;
+            $('#uploadHistory').prepend(historyItem);
+        }
+    </script>
 </body>
 </html>
